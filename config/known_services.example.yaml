@@ -1,0 +1,24 @@
+# Curated service baseline for the cartographer. Copy to config/known_services.yaml
+# (gitignored) and list what you expect to run. Anything discovered but not listed
+# is reported as undocumented; anything listed but not found is reported as not_found.
+# expected_state: running (default, also accepts a waiting timer) | stopped | any
+
+- name: odin-watchdog.timer
+  host: worker
+  type: systemd
+  category: monitoring
+  description: Daily data-freshness watchdog
+
+- name: caddy
+  host: edge
+  type: docker
+  category: proxy
+  description: Reverse proxy fronting the internal domains
+  port: 443
+
+- name: app-db
+  host: db-host
+  type: docker
+  category: database
+  description: Postgres for events, traces and task queue
+  port: 5432

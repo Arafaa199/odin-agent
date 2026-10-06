@@ -1,0 +1,76 @@
+# Example settings. Copy to config/settings.yaml (gitignored) and edit.
+# Code reads settings.yaml when it exists, otherwise this file.
+# ODIN_SETTINGS=/path/to/file.yaml overrides both.
+
+# Notification transports, tried in this order. The first one whose
+# available() check passes gets the message.
+transports:
+- name: telegram          # HTTP shim exposing /status, /send and /ask
+  enabled: true
+  url: http://localhost:3340
+- name: push              # event intake; key comes from INTAKE_KEY
+  enabled: false
+  intake_url: http://localhost:8100
+- name: whatsapp          # same shim contract as telegram
+  enabled: false
+  url: http://localhost:3345
+- name: imessage          # send-only bridge; key comes from IMESSAGE_BRIDGE_KEY
+  enabled: false
+  url: http://localhost:3342
+  recipient: you@example.com
+
+ingest:
+  plaud:
+    output_dir: ~/odin-ingest
+    whisper_model: large-v3-turbo
+    ollama_model: qwen2.5:7b
+    ollama_url: http://localhost:11434
+    codex_enabled: false
+    codex_binary: codex   # looked up on PATH
+    codex_model: gpt-5.2-codex
+
+# Controlled vocabulary for extraction, the vague-item filter and queue routing.
+vocabulary:
+  projects: [demo, billing, reporting]      # known project/workstream names
+  systems: [erp, crm, warehouse]            # names that make a short task concrete
+  tag_domains:                              # queue domain -> tags that route there
+    health: [health, fitness]
+    finance: [finance, money, budget]
+    infra: [infra, server, docker]
+
+taskwarrior:
+  enabled: true
+  executable: task
+  auto_create_threshold: 0.7
+  default_project: demo
+  always_tag:
+  - plaud
+
+task_runner:
+  agent_dir: ~/.local/state/odin/agent      # .enabled flag, lockfile, failures, logs
+  state_file: ~/.local/state/odin/agent/state.md
+  max_minutes: 15
+  max_task_failures: 3
+  tg_url: http://localhost:3340             # shim the executing agent calls for /ask consent
+  tg_approval_timeout_ms: 86400000
+  task_bin: task
+  all_projects:
+  - demo
+  project_context:                          # project -> file under config/context/
+    demo: demo.md
+  default_profile:
+    domain: work
+    work_dir: ~/odin-demo
+    persona: Odin task runner, an autonomous task executor
+  project_profiles:
+    demo:
+      domain: work                          # work | personal (selects tier patterns)
+      work_dir: ~/odin-demo
+      context_file: ~/odin-demo/CLAUDE.md
+      persona: Odin task runner for the demo project
+      watch_repo: ~/odin-demo               # warn if a run leaves uncommitted changes
+      ssh_connectivity_test:
+        match: "staging|deploy"             # only probe for tasks matching this regex
+        host: staging.example.com
+        user: ubuntu
+        key: ~/.ssh/staging.pem

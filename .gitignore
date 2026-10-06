@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.claude/
+
+# Local config (the committed *.example.yaml files are the templates)
+config/settings.yaml
+config/hosts.yaml
+config/known_services.yaml
+config/context/
+config/.idem.db

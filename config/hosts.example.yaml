@@ -1,0 +1,104 @@
+# Example host inventory for the health probe and the cartographer.
+# Copy to config/hosts.yaml (gitignored) and edit. ODIN_HOSTS overrides the path.
+#
+# Per host:
+#   ssh            ssh alias used for remote checks; "" runs the check locally
+#   ssh_port       optional non-default ssh port
+#   address        IP checked for reachability (tailscale status, else ping)
+#   intermittent   true for laptops: offline is SKIP, not FAIL
+#   resources      check disk and memory
+#   systemd        user units; critical_timers page when stopped, on_demand never FAIL
+#   docker         containers that must be running
+#   launchd        macOS agents that must be loaded
+#   http           endpoints curled from the host itself (target defaults to localhost)
+#   proxy          reverse-proxy container plus the domains it fronts
+#   scan           what the cartographer discovers on this host
+
+suppressed_checks: []   # check names never alerted on (retired or intentionally off)
+
+outcome_probes:          # real requests sent from the probe machine
+- name: memory/recall
+  device: db-host
+  url: http://localhost:8410/v1/recall
+  body: {query: healthprobe, k: 1}
+  key_env: RECALL_PROBE_KEY
+  key_header: X-Ingress-Key
+  timeout: 10
+
+hosts:
+  worker:
+    ssh: ""
+    resources: true
+    systemd:
+    - odin-gateway.service
+    - odin-task-runner.timer
+    - odin-ingest.timer
+    - odin-watchdog.timer
+    - odin-healthprobe.timer
+    - utility-capture.service
+    critical_timers:
+    - odin-task-runner.timer
+    - odin-ingest.timer
+    - odin-watchdog.timer
+    - odin-healthprobe.timer
+    on_demand:
+    - utility-capture.service
+    http:
+    - {port: 3340, path: /status, expect: [200]}
+    listening_ports: [20000]
+    bridge_sessions:
+    - {name: whatsapp, url: "http://localhost:3345/status", alive_days: 7}
+    scan: {systemd: true, docker: false, ports: true, cron: true}
+
+  edge:
+    ssh: edge
+    address: 192.0.2.10
+    resources: true
+    dns: true
+    docker: [caddy, homeassistant, n8n, pihole]
+    systemd: [fitness-sync.timer]
+    http:
+    - {port: 8123, path: /, expect: [200]}
+    - {port: 5678, path: /, expect: [200]}
+    proxy:
+      container: caddy
+      domains:
+        ha.example.internal: [200, 401, 403]
+        n8n.example.internal: [200]
+    scan: {systemd: true, docker: true, ports: true, cron: true, n8n: true}
+
+  db-host:
+    ssh: db-host
+    address: 192.0.2.20
+    resources: true
+    docker: [app-db, app-redis]
+    systemd: [intake.service, stall-recovery.timer]
+    critical_timers: [stall-recovery.timer]
+    http:
+    - {port: 8100, path: /health, expect: [200]}
+    postgres_container: app-db
+    redis_container: app-redis
+    backup_dir: ~/backups
+    backup_max_age_hours: 26
+    scan: {systemd: true, docker: true, ports: true, cron: true}
+
+  nas:
+    ssh: nas
+    ssh_port: 2222
+    address: 192.0.2.30
+    resources: true
+    processes: [smbd]
+    scan: {systemd: false, docker: false, ports: true, cron: false}
+
+  laptop:
+    ssh: laptop
+    address: 192.0.2.40
+    intermittent: true
+    launchd:
+    - com.example.mail-intel
+    - com.example.transaction-import
+    - com.example.imessage-bridge
+    http:
+    - {port: 3342, path: /health, expect: [200]}
+    scan: {linux: false, systemd: false, docker: false, launchd: true, ports: true, cron: false,
+           repos_dir: ~/src}
